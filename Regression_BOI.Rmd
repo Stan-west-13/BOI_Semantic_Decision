@@ -9,6 +9,7 @@ output: pdf_document
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(purrr)
 
 df <- readRDS("data/BOI-Assert-ADC_metadata.rds")
 load("data/concrete_abstract.Rdata")
@@ -27,7 +28,7 @@ df_stim$level <- as.factor(df_stim$level)
 
 ## Descriptives
 
-```{r}
+```{r,echo=F}
 df_descrip <- df %>%
   left_join(df_stim, by = c("word" = "Word")) %>%
   select(PROLIFIC_PID, correct, duration, group, n_correct,n_incorrect, level,adc_compscore) %>%
@@ -37,9 +38,16 @@ df_descrip <- df %>%
             perc_correct = sum(correct == "true")/sum(correct == "true" | correct == "false"),
             group = group,
             adc_compscore = adc_compscore) %>%
-  unique()
+  unique() %>%
+  ungroup
 
 
+```
+
+
+## Table of means and boxplots
+
+```{r}
 
 df_descrip %>%
   group_by(group) %>%
@@ -52,45 +60,39 @@ ggplot(df_descrip, aes(x = group, y = mean_duration))+
 
 ggplot(df_descrip, aes(x = group, y = perc_correct))+
   geom_boxplot()+
-  facet_wrap(~Level)
+  facet_wrap(~level)
   
-
 
 ```
 
 
+## T-tests of overall response latency and accuracy
 
+```{r}
+t.test(mean_duration ~ group, data = df_descrip)
+t.test(perc_correct ~ group, data = df_descrip)
+
+```
 
 
 ## Filter only correct responses
 
 ```{r cars}
 
-df_plot <- df_joined %>%
-  select(PROLIFIC_PID, duration, perc_correct, Level, group,correct,n_correct,n_incorrect,adc_compscore) %>%
-  group_by(PROLIFIC_PID, Level) %>%
-  summarize(PROLIFIC_PID = PROLIFIC_PID, duration = mean(duration), perc_correct = sum(correct == "true") / sum(correct == "true" | correct == "false"), Level = Level, group = group, adc_compscore = adc_compscore) %>%
-  unique()
+
   
-  
-ggplot(df_plot, aes(x = adc_compscore, y = duration, color = group))+
+ggplot(df_descrip, aes(x = adc_compscore, y = mean_duration, color = group))+
   geom_point() +
-  facet_grid(~Level)+
+  facet_wrap(~level)+
   geom_smooth(method = "lm")
 
 
-summary(lm(duration ~ adc_compscore, data = df_joined))
+summary(lm(mean_duration ~ adc_compscore + group + level, data = df_descrip))
 
-summary(lm(duration ~ adc_compscore + group + Level, data = df_joined))
-
+summary(lm(perc_correct ~ adc_compscore + group + level, data = df_descrip))
 
 
 ```
 
-## 
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
