@@ -13,19 +13,54 @@ library(ggplot2)
 df <- readRDS("data/BOI-Assert-ADC_metadata.rds")
 load("data/concrete_abstract.Rdata")
 df_stim <- m_conc_abs %>%
-  select(Word, Level = level) %>%
+  select(Word, level = level) %>%
   unique() %>%
-  mutate(Level = as.character(Level))
+  mutate(level = as.character(level))
 
-df_stim[is.na(df_stim$Level), ] <- "abstract"
-df_stim$Level <- as.factor(df_stim$Level)
+df_stim$level[is.na(df_stim$level) ] <- "abstract"
+df_stim$level <- as.factor(df_stim$level)
 
-df_correct <- df %>% 
-  filter(correct == "true")
 
-df_joined <- left_join(df, df_stim, by = c("word" = "Word"))
 
 ```
+
+
+## Descriptives
+
+```{r}
+df_descrip <- df %>%
+  left_join(df_stim, by = c("word" = "Word")) %>%
+  select(PROLIFIC_PID, correct, duration, group, n_correct,n_incorrect, level,adc_compscore) %>%
+  group_by(PROLIFIC_PID, level) %>%
+  reframe(PROLIFIC_PID = PROLIFIC_PID, 
+            mean_duration = mean(duration),
+            perc_correct = sum(correct == "true")/sum(correct == "true" | correct == "false"),
+            group = group,
+            adc_compscore = adc_compscore) %>%
+  unique()
+
+
+
+df_descrip %>%
+  group_by(group) %>%
+  summarize(mean_dur = mean(mean_duration),
+            mean_correct = mean(perc_correct))
+
+ggplot(df_descrip, aes(x = group, y = mean_duration))+
+  geom_boxplot()
+
+
+ggplot(df_descrip, aes(x = group, y = perc_correct))+
+  geom_boxplot()+
+  facet_wrap(~Level)
+  
+
+
+```
+
+
+
+
 
 ## Filter only correct responses
 
