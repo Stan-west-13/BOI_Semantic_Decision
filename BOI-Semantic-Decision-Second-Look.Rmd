@@ -1,0 +1,632 @@
+---
+title: "BOI Semantic Judgement Second Look"
+author: "Stan West"
+date: "2024-07-01"
+output: pdf_document
+---
+
+This Rmarkdown will take a second look at the semantic decision task data where participants were told to decide whether a word was abstract or concrete. The concrete words in this set of 600 words varied on their level of body-object interaction scores. Participants were provided with practice pressing the buttons indicating their decision ('F' for concrete, and 'J' for abstract). Participants were also provided with 24 practice trials with feedback where they were told if their decision was incorrect. 
+
+The first part of this markdown is describes all 175 participants who completed the task, regardless of accuracy. The second part of the markdown describes a sub-sample of participants who had 70% accuracy or higher. This accuracy score was computed excluding trials where participants responded quicker than 200ms, per previous work. Lastly, I plot an "elbow" plot of the number of participants who fall within certain percentages of accuracy after removing responses that were quicker than 200ms. 
+
+Overall, it high BOI words are easier to categorize as concrete or abstract than the medium or low BOI, as indicated by higher accuracy and lower reaction time within participants for these words. This effect is consistent in both the raw sample not cutting out low performing participants, and the 70% accuracy or above sample. 
+
+
+Included in this second look, I have added Table 1 with with descriptive statistics for the different BOI levels for our concrete nouns. Additionally, I have added boxplots and t-tests describing the group differences in the ADC and ASSERT. Overall, participants in the ASD group scored significantly higher on both the ADC and the ASSERT. 
+
+I also included two mixed ANOVAs looking at accuracy and reaction time. Accuracy was calculated as the percentage of responses per participant that were correct relative to the number of trials that a response was attempted. I included this percentage as the dependent variable, the BOI as the within-subjects factor, group as the between-subjects factor, and PROLIFIC_PID as the within-subjects id (wid). The definition for the reaction time ANOVA was identical, except for swapping accuracy with reaction time. Only correct responses were considered for this analysis. Overall, there was a significant simple main effect of BOI level in each model, with a significant interaction. Post-hoc tests and pairwise t-tests are included below. 
+
+Finally, I included plots of the within-participant differences between BOI levels. For each participant, I computed differences for every combination of BOI level (low-high, low-medium, medium-high) and constructed boxplots of those differences for each group and level. Additionally, I constructed dot-line plots showing each participants average accuracy and reaction time performance across BOI levels, faceted by group.  
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(knitr)
+library(tidyverse)
+library(rstatix)
+library(ez)
+library(dplyr)
+d <- readRDS("data/BOI-Semantic-Judgement-metadata.rds")
+load("data/stim_600.Rdata")
+d <- left_join(d,select(conc_abs_stim, Word, WordType, mean_rating_boi_pexman,level), by = c("word" = "Word"))
+d$level <- ifelse(is.na(d$level), "abstract", d$level)
+
+qual_na <- read.csv("data/BOI_Semantic_Decision_NA_July 10, 2024_09.37.csv")[-c(1,2),]
+qual_asd <- read.csv("data/BOI_Semantic_Decision_Aut_July 10, 2024_09.38.csv")[-c(1,2)]
+
+qual_na <- qual_na %>%
+              select(PROLIFIC_PID, RecordedDate, Finished, Aut_Group,starts_with("Q24"),starts_with("Q25"), Q29, Q1.1, Q2,Q3.1,Q4.1,Q5.1,Q6.1,Q7)
+
+qual_asd <- qual_asd%>%
+              select(PROLIFIC_PID, RecordedDate, Finished, Aut_Group,starts_with("Q24"),starts_with("Q25"), Q29, Q1.1, Q2,Q3.1,Q4.1,Q5.1,Q6.1,Q7)
+
+
+
+```
+
+
+```{r,echo= F,}
+
+tbl_boi <- conc_abs_stim %>%
+  filter(WordType == "Concrete") %>%
+  group_by(level) %>%
+  summarize(mean_boi = mean(mean_rating_boi_pexman),
+            median_boi = median(mean_rating_boi_pexman),
+            sd_boi = sd(mean_rating_boi_pexman),
+            range_boi = range(mean_rating_boi_pexman)) %>%
+  mutate(level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high"))) %>%
+  arrange(level)
+
+kable(tbl_boi, caption = "BOI nouns descriptives")
+```
+
+
+```{r, include = F}
+
+accuracy_bkdwn <- d %>% 
+      select(PROLIFIC_PID,
+             group,
+             n_unknown,
+             n_incorrect, 
+             n_correct,
+             n_unanswered,
+             perc_correct,
+             perc_total,
+             total,
+             mean_dur,
+             openLabId,
+             reject) %>% 
+      unique() 
+
+
+
+
+plt_df <- d %>%
+  filter(!response == "", !response == "unknown") %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(perc_level_cor = sum(correct == "true")/n(),
+         level = factor(level, levels = c("low","medium","high", "abstract"), labels = c("low","medium","high", "abstract")),
+         mean_rt = mean(duration))
+
+
+
+```
+
+## Descriptives of orignial sample before filtering out low performers.
+
+### This plot is showing the percentage of correct judgements within participants at each level of BOI (if someone got 50 "low" BOI judgements correct, their "low" BOI percentage would be 50%). Unknown and timed out responses are not included. Abstract performance is based out of 300, since we do not have levels of BOI for the abstract nouns. 
+
+
+```{r,echo = F}
+
+tbl_grp <- accuracy_bkdwn %>% 
+  group_by(group) %>%
+  summarize(mean_accuracy = mean(perc_correct, na.rm = T),
+            mean_reaction_time = mean(mean_dur, na.rm = T),
+            n_unknown = sum(n_unknown),
+            n_unanswered = sum(n_unanswered),
+            n = n())
+
+kable(tbl_grp, caption = "Group-wise descriptives")
+
+ggplot(plt_df, aes(x = group, y = perc_level_cor, color = level))+
+  geom_boxplot()+
+  labs(y = "percent correct", x = "group")+
+  ggtitle("Accuracy percentage by BOI level and group")
+
+tbl_plot <- plt_df %>%
+  group_by(group,level) %>%
+  summarize(mean_level_correct = mean(perc_level_cor))
+
+kable(tbl_plot, caption = "Mean accuracy percentage by BOI level")
+
+```
+
+### This plot is showing the mean reaction time within participants at each level of BOI. Unknown and timed out responses are not included. 
+
+
+```{r,echo=F}
+
+ggplot(plt_df, aes(x = group, y = mean_rt, color = level))+
+  geom_boxplot()+
+  labs(y = "mean RT", x = "group")+
+  ggtitle("Reaction time by BOI level and group")
+
+
+tbl_plot_rt <- plt_df %>%
+  group_by(group,level) %>%
+  summarize(mean_level_RT = mean(mean_rt))
+
+kable(tbl_plot_rt, caption = "Mean RT by BOI level")
+
+```
+
+
+
+## Filtering out responses faster than 200ms and recomputing accuracy. From here, only keeping participants with 70% accuracy or higher.
+
+
+```{r,echo=F}
+d_filt <- d %>%
+  filter(duration >= 200) %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(n_unknown = sum(response == "unknown",na.rm = T),
+         n_correct = sum(correct == "true", na.rm = T),
+         n_unanswered = sum(response =="",na.rm = T),
+         n_incorrect = sum(correct == "false" & !response == "unknown", na.rm = T),
+         perc_correct = sum(correct == "true", na.rm = T)/(n()-(n_unknown + n_unanswered)),
+         perc_total = sum(correct == "true",na.rm=T)/n(),
+         mean_dur = mean(duration,na.rm = T),
+         total = n_unknown+n_correct+n_incorrect+n_unanswered,
+         reject = ifelse(perc_correct < 0.7 , TRUE,FALSE)) %>%
+  mutate(group = as.factor(group),
+         level = as.factor(level),
+         correct = as.factor(correct)) %>%
+  unique() 
+
+accuracy_bkdwn_filt <- d_filt %>% 
+      filter(reject == FALSE) %>%
+      select(PROLIFIC_PID,
+             group,
+             n_unknown,
+             n_incorrect, 
+             n_correct,
+             n_unanswered,
+             perc_correct,
+             perc_total,
+             total,
+             mean_dur,
+             openLabId,
+             reject) %>% 
+      unique() 
+
+plt_df_filt <- d_filt %>%
+  filter(!response == "", !response == "unknown", reject == FALSE) %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(perc_level_cor = sum(correct == "true")/n(),
+         level = factor(level, levels = c("low","medium","high", "abstract"), labels = c("low","medium","high", "abstract")),
+         mean_rt = mean(duration))
+
+```
+
+
+### This plot shows the mean accuracy percentage for each participant for each level of BOI.
+
+```{r,echo=F}
+
+
+
+tbl_grp_filt <- accuracy_bkdwn_filt %>% 
+  group_by(group) %>%
+  summarize(mean_accuracy = mean(perc_correct, na.rm = T),
+            mean_reaction_time = mean(mean_dur, na.rm = T),
+            n_unknown = sum(n_unknown),
+            n_unanswered = sum(n_unanswered),
+            n = n())
+
+kable(tbl_grp_filt, caption = "Group-wise descriptives")
+
+ggplot(plt_df_filt, aes(x = group, y = perc_level_cor, color = level))+
+  geom_boxplot()+
+  labs(y = "percent correct", x = "group")+
+  ggtitle("Accuracy percentage by BOI level and group")
+
+tbl_plot_filt <- plt_df_filt %>%
+  group_by(group,level) %>%
+  summarize(mean_level_correct = mean(perc_level_cor))
+
+kable(tbl_plot_filt, caption = "Mean accuracy percentage by BOI level")
+
+
+```
+
+
+### This plot shows the mean reaction time for each participant at each level of BOI. 
+
+```{r,echo=F}
+ggplot(plt_df_filt, aes(x = group, y = mean_rt, color = level))+
+  geom_boxplot()+
+  labs(x = "group", y = "mean RT")+
+  ggtitle("Reaction time by BOI level and group")
+
+
+tbl_plot_rt_filt <- plt_df_filt %>%
+  group_by(group,level) %>%
+  summarize(mean_level_RT = mean(mean_rt))
+
+kable(tbl_plot_rt_filt, caption = "Mean RT by BOI level")
+
+```
+
+## Distribution of number of participants falling within 50 - 90% accuracy cutoffs after filtering out responses quicker than 200ms. 
+
+```{r,echo = F}
+df_elbow <- d_filt %>%
+  filter(reject == FALSE) %>%
+  select(PROLIFIC_PID, group, perc_correct) %>%
+  unique()%>%
+  group_by(group) %>%
+  mutate(n_50 = sum(perc_correct >= .50),
+         n_55 = sum(perc_correct >= .55),
+         n_60 = sum(perc_correct >= .60),
+         n_65 = sum(perc_correct >= .65),
+         n_70 = sum(perc_correct >= .70),
+         n_75 = sum(perc_correct >= .75),
+         n_80 = sum(perc_correct >= .80),
+         n_85 = sum(perc_correct >= .85),
+         n_90 = sum(perc_correct >= .90))
+
+df_elbow_long <- df_elbow %>%
+  pivot_longer(.,
+               cols = starts_with('n_'),
+               names_to = c('fill',"percentage"),
+               values_to = "n",
+               names_sep = "_") %>%
+  select(group, percentage, n) %>%
+  unique() %>%
+  mutate(group = as.factor(group),
+         percentage = as.factor(percentage))
+
+
+
+ggplot(df_elbow_long,aes(x = percentage, y = n, color = group, group = group)) +
+  geom_point()+
+  geom_line()+
+  labs(x = "percent correct")+
+  ggtitle("Sample size distribution over accuracy cutoffs")
+
+
+```
+
+
+```{r,echo = F}
+
+num_fun <- function(x){
+  return(as.numeric(as.character(x)))
+}
+
+qual_na_filt <- qual_na %>%
+  filter(PROLIFIC_PID %in% accuracy_bkdwn_filt$PROLIFIC_PID) %>%
+  mutate(RecordedDate = parse_datetime(RecordedDate,"%Y-%m-%d %H:%M:%S"),
+         group = "NA",
+         PROLIFIC_PID = as.factor(PROLIFIC_PID)) %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(last_entry = ifelse(RecordedDate == max(RecordedDate),TRUE,FALSE )) %>%
+  filter(last_entry == TRUE)
+                
+qual_asd_filt <- qual_asd %>%
+  filter(PROLIFIC_PID %in% accuracy_bkdwn_filt$PROLIFIC_PID) %>%
+  mutate(RecordedDate = parse_datetime(RecordedDate,"%Y-%m-%d %H:%M:%S"),
+         group = "ASD",
+         PROLIFIC_PID = as.factor(PROLIFIC_PID)) %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(last_entry = ifelse(RecordedDate == max(RecordedDate),TRUE,FALSE )) %>%
+  filter(last_entry == TRUE)
+
+qual_NA_ASD_filt <- rbind(qual_asd_filt,qual_na_filt)
+
+ADC_cols <- qual_na_filt %>%
+  ungroup()%>%
+  select(starts_with("Q24"),starts_with("Q25")) %>%
+  colnames()
+
+assert_cols <- c("Q1.1","Q2", "Q3.1","Q4.1","Q5.1","Q6.1","Q7")
+
+qual_NA_ASD_filt[ADC_cols] <- lapply(qual_NA_ASD_filt[ADC_cols], factor,
+                                     levels = c("Never","Sometimes","Frequently","Always"), labels = c(0,1,2,3))
+qual_NA_ASD_filt[assert_cols] <- lapply(qual_NA_ASD_filt[assert_cols], factor, 
+                                        levels = c("Not true","Somewhat true","Certainly true"), labels = c(0,1,2))
+
+qual_NA_ASD_filt <- qual_NA_ASD_filt %>%
+  mutate_at(c(ADC_cols, assert_cols), num_fun)
+
+qual_NA_ASD_filt <- qual_NA_ASD_filt %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(child_hist = sum(across(starts_with("Q24")), na.rm = T),
+         current_func = sum(across(starts_with("Q25")), na.rm = T),
+         adc_compscore = sum(child_hist,current_func, na.rm = T),
+         assert_compscore = sum(across(all_of(assert_cols)),na.rm = T)) %>%
+  ungroup()
+
+```
+
+
+## Description of ADC scores 
+
+```{r,echo = F}
+
+tbl_ADC <- qual_NA_ASD_filt %>%
+  group_by(group) %>%
+  summarize(mean_compscore = mean(adc_compscore),
+            sd_compscore = sd(adc_compscore),
+            range_compscore = range(adc_compscore),
+            prop_above_65 = sum(adc_compscore >= 65)/n(),
+            n_above_65 = sum(adc_compscore >= 65),
+            n_below_65 = sum(adc_compscore < 65),
+            prop_above_56 = sum(adc_compscore >= 56)/n())
+
+kable(tbl_ADC[,1:7], caption = "ADC composite score by group")
+kable(tbl_ADC[,c(1,8)],label = NA)
+
+ggplot(qual_NA_ASD_filt, aes( x= group, y = adc_compscore,color  = group))+
+  geom_boxplot()
+
+t.test(adc_compscore~group, data = qual_NA_ASD_filt)
+
+```
+
+
+## Description of ASSERT
+
+```{r, echo = F}
+
+tbl_assert <- qual_NA_ASD_filt %>%
+  group_by(group) %>%
+  summarize(mean_compscore = mean(assert_compscore),
+            sd_compscore = sd(assert_compscore),
+            range_compscore = range(assert_compscore),
+            prop_above_8 = sum(assert_compscore >= 8)/n(),
+            n_above_8 = sum(assert_compscore >= 8),
+            n_below_8 = sum(assert_compscore < 8))
+
+kable(tbl_assert, caption = "ASSERT composite score by group")
+
+ggplot(qual_NA_ASD_filt, aes( x= group, y = assert_compscore,color  = group))+
+  geom_boxplot()
+
+t.test(assert_compscore~group, data = qual_NA_ASD_filt)
+
+```
+
+## Mixed ANOVAS
+
+```{r, echo = F}
+d_anova_acc <- d_filt %>%
+  filter(reject == FALSE,!correct == "", WordType == "Concrete",!response == "unknown") %>%
+  group_by(PROLIFIC_PID, level) %>%
+  mutate(perc_correct_level = sum(correct == "true")/n()) %>%
+  mutate(correct = factor(correct, levels = c("true","false"),labels = c("true","false")),
+         level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high")),
+         word = as.factor(word)) %>%
+  select(perc_correct_level, level,group,PROLIFIC_PID) %>%
+  unique()
+
+
+d_anova_rt <- d_filt %>%
+  filter(reject == FALSE, !ended_on == "timeout", correct == "true", WordType == "Concrete") %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(median_rt = median(duration)) %>%
+  select(median_rt, level, group, PROLIFIC_PID) %>%
+  unique()
+
+
+
+
+```
+
+### Accuracy ANOVA
+
+```{r,echo = F}
+m_acc <- ezANOVA(data = d_anova_acc,
+             dv = perc_correct_level,
+             within = level,
+             between = group,
+             wid = PROLIFIC_PID )
+
+m_acc$ANOVA
+
+
+
+
+
+```
+
+### Accuracy simple main effects of BOI level post-hoc 
+
+```{r, echo = F}
+ph_acc_level <- d_anova_acc %>%
+  group_by(group) %>%
+  anova_test(dv = perc_correct_level, wid = PROLIFIC_PID, within = level) %>%
+  get_anova_table() %>%
+  adjust_pvalue(method = "bonferroni")
+ph_acc_level
+
+```
+
+### Accuracy paired t-tests 
+
+
+```{r, echo = F}
+
+ph_acc_ttest <- d_anova_acc %>%
+  group_by(group) %>%
+  pairwise_t_test(
+    perc_correct_level~level, paired = T,
+    p.adjust.method = "bonferroni")%>%
+  select(-.y., -df,)
+
+ph_acc_ttest
+
+```
+
+
+
+### Reaction time ANOVA
+
+```{r, echo = F}
+m_rt <- ezANOVA(data = d_anova_rt,
+             dv = median_rt,
+             within = level,
+             between = group,
+             wid = PROLIFIC_PID )
+
+m_rt$ANOVA
+```
+
+### Reaction time simple main effects of BOI level post-hoc 
+
+```{r, echo = F}
+ph_rt_level <- d_anova_rt %>%
+  group_by(group) %>%
+  anova_test(dv = median_rt, wid = PROLIFIC_PID, within = level) %>%
+  get_anova_table() %>%
+  adjust_pvalue(method = "bonferroni")
+ph_rt_level
+
+```
+
+### Reaction time paired t-tests 
+
+
+```{r, echo = F}
+
+ph_rt_ttest <- d_anova_rt %>%
+  group_by(group) %>%
+  pairwise_t_test(
+    median_rt~level, paired = T,
+    p.adjust.method = "bonferroni") %>%
+  select(-.y., -df,)
+
+ph_rt_ttest
+
+```
+
+
+## Abstract words t tests.
+
+```{r,echo = F}
+d_anova_acc_abstract <- d_filt %>%
+  filter(reject == FALSE,!correct == "", WordType == "Abstract",!response == "unknown") %>%
+  group_by(PROLIFIC_PID, level) %>%
+  mutate(perc_correct_level = sum(correct == "true")/n()) %>%
+  mutate(correct = factor(correct, levels = c("true","false"),labels = c("true","false")),
+         level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high")),
+         word = as.factor(word)) %>%
+  select(perc_correct_level, level,group,PROLIFIC_PID) %>%
+  unique()
+
+
+d_anova_rt_abstract <- d_filt %>%
+  filter(reject == FALSE, !ended_on == "timeout", correct == "true", WordType == "Abstract") %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(median_rt = median(duration)) %>%
+  select(median_rt, level, group, PROLIFIC_PID) %>%
+  unique()
+
+
+
+```
+
+### Accuracy
+
+```{r, echo = F}
+t.test(perc_correct_level~group, data = d_anova_acc_abstract)
+
+```
+
+### Reaction time
+
+```{r, echo = F}
+t.test(median_rt~group, data = d_anova_rt_abstract)
+
+```
+
+
+## Pairwise within subjects differences
+
+```{r, echo = F}
+d_pairwise_acc <- d_filt %>%
+  filter(reject == FALSE,!correct == "",!ended_on == "timeout", WordType == "Concrete",!response == "unknown") %>%
+  group_by(PROLIFIC_PID, level) %>%
+  mutate(perc_correct_level = sum(correct == "true")/n()) %>%
+  mutate(correct = factor(correct, levels = c("true","false"),labels = c("true","false")),
+         level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high")),
+         word = as.factor(word)) %>%
+  select(perc_correct_level, level,group,PROLIFIC_PID) %>%
+  unique()
+
+
+d_pairwise_rt <- d_filt %>%
+  filter(reject == FALSE,!ended_on == "timeout",correct == "true" ,  WordType == "Concrete") %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(median_rt = median(duration)) %>%
+  select(median_rt, level, group, PROLIFIC_PID) %>%
+  unique()
+
+acc_pairwise <- d_pairwise_acc %>% 
+  pivot_wider(.,
+              names_from = "level",
+              values_from = "perc_correct_level") %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(lh = abs(low - high),
+         lm = abs(low - medium),
+         mh = abs(medium - high)) %>%
+  pivot_longer(.,
+               cols = c("low","medium","high"),
+               names_to = "level",
+               values_to = "perc_correct_level") %>%
+  pivot_longer(.,
+               cols = c("lh","lm","mh"),
+               names_to = "contrast",
+               values_to = "difference") %>%
+  mutate(contrast = factor(contrast, levels = c("lh","lm","mh"), labels = c("low-high","low-medium","medium-high")),
+         level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high")))
+
+rt_pairwise <- d_pairwise_rt %>% 
+  pivot_wider(.,
+              names_from = "level",
+              values_from = "median_rt") %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(lh = abs(low - high),
+         lm = abs(low - medium),
+         mh = abs(medium - high)) %>%
+  pivot_longer(.,
+               cols = c("low","medium","high"),
+               names_to = "level",
+               values_to = "median_rt") %>%
+  pivot_longer(.,
+               cols = c("lh","lm","mh"),
+               names_to = "contrast",
+               values_to = "difference") %>%
+  mutate(contrast = factor(contrast, levels = c("lh","lm","mh"), labels = c("low-high","low-medium","medium-high")),
+         level = factor(level, levels = c("low","medium","high"), labels = c("low","medium","high")))
+
+```
+
+
+
+```{r,echo = F}
+
+ggplot(acc_pairwise, aes(x = group, y = difference, color = contrast ))+
+  geom_boxplot()+
+  labs(y = "difference percent correct")+
+  ggtitle("Within-subject pairwise BOI accuracy differences")
+
+ggplot(rt_pairwise, aes(x = group, y = difference, color = contrast ))+
+  geom_boxplot()+
+  labs(y = "difference RT")+
+  ggtitle("Within-subject pairwise BOI reaction time differences")
+```
+
+```{r,echo = F}
+ggplot(acc_pairwise, aes(x = level, y = perc_correct_level, color = PROLIFIC_PID,group = PROLIFIC_PID))+
+  geom_point()+
+  geom_line(alpha = 0.3)+
+  theme(legend.position = "none")+
+  labs(x = "level", y = "percent correct")+
+  facet_grid(~group)+
+  ggtitle("Percent correct by participant and BOI level ")
+
+ggplot(rt_pairwise, aes(x = level, y = median_rt, color = PROLIFIC_PID,group = PROLIFIC_PID))+
+  geom_point()+
+  geom_line(alpha = 0.3)+
+  theme(legend.position = "none")+
+  labs(x = "level", y = "median RT")+
+  facet_grid(~group)+
+  ggtitle("Median reaction time by participant and BOI level ")
+
+```
+
+
+
+
+

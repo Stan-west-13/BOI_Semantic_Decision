@@ -1,0 +1,246 @@
+---
+title: "BOI Semantic Judgement First Look"
+author: "Stan West"
+date: "2024-07-01"
+output: pdf_document
+---
+
+This Rmarkdown will take a first look at the semantic decision task data where participants were told to decide whether a word was abstract or concrete. The concrete words in this set of 600 words varied on their level of body-object interaction scores. Participants were provided with practice pressing the buttons indicating their decision ('F' for concrete, and 'J' for abstract). Participants were also provided with 24 practice trials with feedback where they were told if their decision was incorrect. 
+
+The first part of this markdown is describes all 175 participants who completed the task, regardless of accuracy. The second part of the markdown describes a sub-sample of participants who had 70% accuracy or higher. This accuracy score was computed excluding trials where participants responded quicker than 200ms, per previous work. Lastly, I plot an "elbow" plot of the number of participants who fall within certain percentages of accuracy after removing responses that were quicker than 200ms. 
+
+Overall, it high BOI words are easier to categorize as concrete or abstract than the medium or low BOI, as indicated by higher accuracy and lower reaction time within participants for these words. This effect is consistent in both the raw sample not cutting out low performing participants, and the 70% accuracy or above sample. 
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(knitr)
+library(tidyverse)
+library(dplyr)
+d <- readRDS("data/BOI-Semantic-Judgement-metadata.rds")
+load("data/stim_600.Rdata")
+d <- left_join(d,select(conc_abs_stim, Word, WordType, mean_rating_boi_pexman,level), by = c("word" = "Word"))
+d$level <- ifelse(is.na(d$level), "abstract", d$level)
+```
+
+
+
+
+```{r, include = F}
+
+accuracy_bkdwn <- d %>% 
+      select(PROLIFIC_PID,
+             group,
+             n_unknown,
+             n_incorrect, 
+             n_correct,
+             n_unanswered,
+             perc_correct,
+             perc_total,
+             total,
+             mean_dur,
+             openLabId,
+             reject) %>% 
+      unique() 
+
+
+
+
+plt_df <- d %>%
+  filter(!response == "", !response == "unknown") %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(perc_level_cor = sum(correct == "true")/n(),
+         level = factor(level, levels = c("low","medium","high", "abstract"), labels = c("low","medium","high", "abstract")),
+         mean_rt = mean(duration))
+
+
+
+```
+
+## Descriptives of orignial sample before filtering out low performers.
+
+### This plot is showing the percentage of correct judgements within participants at each level of BOI (if someone got 50 "low" BOI judgements correct, their "low" BOI percentage would be 50%). Unknown and timed out responses are not included. Abstract performance is based out of 300, since we do not have levels of BOI for the abstract nouns. 
+
+
+```{r,echo = F}
+tbl_grp <- accuracy_bkdwn %>% 
+  group_by(group) %>%
+  summarize(mean_accuracy = mean(perc_correct, na.rm = T),
+            mean_reaction_time = mean(mean_dur, na.rm = T),
+            n_unknown = sum(n_unknown),
+            n_unanswered = sum(n_unanswered),
+            n = n())
+
+kable(tbl_grp, caption = "Group-wise descriptives")
+
+ggplot(plt_df, aes(x = group, y = perc_level_cor, color = level))+
+  geom_boxplot()+
+  labs(x = "percent correct", y = "group")+
+  ggtitle("Accuracy percentage by BOI level and group")
+
+tbl_plot <- plt_df %>%
+  group_by(group,level) %>%
+  summarize(mean_level_correct = mean(perc_level_cor))
+
+kable(tbl_plot, caption = "Mean accuracy percentage by BOI level")
+
+```
+
+### This plot is showing the mean reaction time within participants at each level of BOI. Unknown and timed out responses are not included. 
+
+
+```{r,echo=F}
+
+ggplot(plt_df, aes(x = group, y = mean_rt, color = level))+
+  geom_boxplot()+
+  labs(x = "mean RT", y = "group")+
+  ggtitle("Reaction time by BOI level and group")
+
+
+tbl_plot_rt <- plt_df %>%
+  group_by(group,level) %>%
+  summarize(mean_level_RT = mean(mean_rt))
+
+kable(tbl_plot_rt, caption = "Mean RT by BOI level")
+
+```
+
+
+
+## Filtering out responses faster than 200ms and recomputing accuracy. From here, only keeping participants with 70% accuracy or higher.
+
+
+```{r,echo=F}
+d_filt <- d %>%
+  filter(duration >= 200) %>%
+  group_by(PROLIFIC_PID) %>%
+  mutate(n_unknown = sum(response == "unknown",na.rm = T),
+         n_correct = sum(correct == "true", na.rm = T),
+         n_unanswered = sum(response =="",na.rm = T),
+         n_incorrect = sum(correct == "false" & !response == "unknown", na.rm = T),
+         perc_correct = sum(correct == "true", na.rm = T)/(n()-(n_unknown + n_unanswered)),
+         perc_total = sum(correct == "true",na.rm=T)/n(),
+         mean_dur = mean(duration,na.rm = T),
+         total = n_unknown+n_correct+n_incorrect+n_unanswered,
+         reject = ifelse(perc_correct < 0.7 , TRUE,FALSE)) %>%
+  mutate(group = as.factor(group),
+         level = as.factor(level),
+         correct = as.factor(correct)) %>%
+  unique() 
+
+accuracy_bkdwn_filt <- d_filt %>% 
+      filter(reject == FALSE) %>%
+      select(PROLIFIC_PID,
+             group,
+             n_unknown,
+             n_incorrect, 
+             n_correct,
+             n_unanswered,
+             perc_correct,
+             perc_total,
+             total,
+             mean_dur,
+             openLabId,
+             reject) %>% 
+      unique() 
+
+plt_df_filt <- d_filt %>%
+  filter(!response == "", !response == "unknown", reject == FALSE) %>%
+  group_by(PROLIFIC_PID,level) %>%
+  mutate(perc_level_cor = sum(correct == "true")/n(),
+         level = factor(level, levels = c("low","medium","high", "abstract"), labels = c("low","medium","high", "abstract")),
+         mean_rt = mean(duration))
+
+```
+
+
+### This plot shows the mean accuracy percentage for each participant for each level of BOI.
+
+```{r,echo=F}
+
+
+
+tbl_grp_filt <- accuracy_bkdwn_filt %>% 
+  group_by(group) %>%
+  summarize(mean_accuracy = mean(perc_correct, na.rm = T),
+            mean_reaction_time = mean(mean_dur, na.rm = T),
+            n_unknown = sum(n_unknown),
+            n_unanswered = sum(n_unanswered),
+            n = n())
+
+kable(tbl_grp_filt, caption = "Group-wise descriptives")
+
+ggplot(plt_df_filt, aes(x = group, y = perc_level_cor, color = level))+
+  geom_boxplot()+
+  labs(x = "percent correct", y = "group")+
+  ggtitle("Accuracy percentage by BOI level and group")
+
+tbl_plot_filt <- plt_df_filt %>%
+  group_by(group,level) %>%
+  summarize(mean_level_correct = mean(perc_level_cor))
+
+kable(tbl_plot_filt, caption = "Mean accuracy percentage by BOI level")
+
+
+```
+
+
+### This plot shows the mean reaction time for each participant at each level of BOI. 
+
+```{r,echo=F}
+ggplot(plt_df_filt, aes(x = group, y = mean_rt, color = level))+
+  geom_boxplot()+
+  labs(x = "mean RT", y = "group")+
+  ggtitle("Reaction time by BOI level and group")
+
+
+tbl_plot_rt_filt <- plt_df_filt %>%
+  group_by(group,level) %>%
+  summarize(mean_level_RT = mean(mean_rt))
+
+kable(tbl_plot_rt_filt, caption = "Mean RT by BOI level")
+
+```
+
+## Distribution of number of participants falling within 50 - 90% accuracy cutoffs after filtering out responses quicker than 200ms. 
+
+```{r,echo = F}
+df_elbow <- d_filt %>%
+  filter(reject == FALSE) %>%
+  select(PROLIFIC_PID, group, perc_correct) %>%
+  unique()%>%
+  group_by(group) %>%
+  mutate(n_50 = sum(perc_correct >= .50),
+         n_55 = sum(perc_correct >= .55),
+         n_60 = sum(perc_correct >= .60),
+         n_65 = sum(perc_correct >= .65),
+         n_70 = sum(perc_correct >= .70),
+         n_75 = sum(perc_correct >= .75),
+         n_80 = sum(perc_correct >= .80),
+         n_85 = sum(perc_correct >= .85),
+         n_90 = sum(perc_correct >= .90))
+
+df_elbow_long <- df_elbow %>%
+  pivot_longer(.,
+               cols = starts_with('n_'),
+               names_to = c('fill',"percentage"),
+               values_to = "n",
+               names_sep = "_") %>%
+  select(group, percentage, n) %>%
+  unique() %>%
+  mutate(group = as.factor(group),
+         percentage = as.factor(percentage))
+
+
+
+ggplot(df_elbow_long,aes(x = percentage, y = n, color = group, group = group)) +
+  geom_point()+
+  geom_line()+
+  labs(x = "percent correct")+
+  ggtitle("Sample size distribution over accuracy cutoffs")
+
+
+```
+
+
+

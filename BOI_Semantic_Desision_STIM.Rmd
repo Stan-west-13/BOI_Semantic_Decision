@@ -1,0 +1,414 @@
+---
+title: "BOI_Concrete_Abstract_STIM"
+author: "Stan West"
+date: "2024-05-29"
+output: pdf_document
+---
+
+This markdown breaks the BOI data for abstract and concrete nouns into three levels of specificity. First, I consider the full array of concrete and abstract nouns available, then I bin the concrete nouns into low, medium, and high BOI groups based on keeping bins as equal as possible. Finally, I randomly sample 100 words from each of those bins, as well as 300 abstract words from the full set of abstract nouns so as to keep the number of abstract and concrete words equal. For each of these levels, I provide descriptive statistics, density plots, and statistical tests contrasting abstract vs. concrete or different levels of concrete BOI on different psycholinguistic variables.
+
+All in all, it looks like abstract and concrete nouns are easily matched on frequency, but other psycholinguistic variables might need to be controlled for in the model. AoA is plotted separately from other variables in each plot because it is on a much larger scale.
+
+```{r setup, include=FALSE}
+
+
+library(ggplot2)
+library(dplyr)
+library(MatchIt)
+library(readxl)
+library(showtext)
+library(tidyr)
+library(purrr)
+meta <- readRDS("data/BOI_Metadata.rds")
+conc <- read_excel("data/Paxman_concreteness.xlsx") 
+freq_context <- read_xlsx("data/SUBTLEX-US frequency list with PoS and Zipf information.xlsx")
+aoa <- read_excel("data/AoA_51715_words.xlsx")
+
+stim <- left_join(conc, meta, by = c("Word" = "item"))
+stim <- left_join(stim, select(freq_context, Lg10WF, Lg10CD,Word, Dom_PoS_SUBTLEX))
+stim <- left_join(stim, select(aoa, Word, AoA_Kup_lem))
+stim$AoA_Kup_lem <- as.numeric(stim$AoA_Kup_lem)
+
+```
+
+
+## Psycholinguistic Coverage
+Amount of words per word-type and coverage of other psycholinguisitic variables. This is after filterting down to nouns and words that have concreteness ratings. All words have complete, or near complete psycholinguistic coverage.
+
+```{r}
+
+stim %>%
+  filter(Dom_PoS_SUBTLEX == "Noun", !is.na(Concrete_rating)) %>%
+  group_by(WordType) %>%
+  summarize(n = n(),
+            coverage_aoa_perc = sum(!is.na(AoA_Kup_lem))/length(Word),
+            coverage_wf_perc =sum(!is.na(Lg10WF))/length(Word),
+            coverage_cd_perc = sum(!is.na(Lg10CD))/length(Word),
+            coverage_concreteness_perc = sum(!is.na(Concrete_rating))/length(Word))
+
+
+
+
+```
+
+
+```{r,include=FALSE}
+stim_nouns <- stim %>%
+                filter(Dom_PoS_SUBTLEX == "Noun", !is.na(Concrete_rating))
+graph_df <- stim_nouns %>%
+              pivot_longer(.,
+                           cols = c("mean_rating_boi_pexman", 
+                                    "AoA_Kup_lem",
+                                    "Lg10WF",
+                                    "Lg10CD"),
+                           names_to = "measure",
+                           values_to = "value") %>%
+              select(Word, WordType, measure, value) %>%
+              mutate(measure = as.factor(measure),
+                     WordType = as.factor(WordType))
+            
+x <- stim_nouns %>%
+  group_by(WordType) %>%
+  summarize(n = n(),
+            mean_aoa = mean(AoA_Kup_lem, na.rm = T),
+            sd_aoa = sd(AoA_Kup_lem, na.rm = T),
+            mean_wf = mean(Lg10WF),
+            sd_wf = sd(Lg10WF),
+            mean_cd = mean(Lg10CD),
+            sd_cd = sd(Lg10CD),
+            mean_conc = mean(Concrete_rating),
+            sd_conc = sd(Concrete_rating),
+            mean_boi = mean(mean_rating_boi_pexman, na.rm = T),
+            sd_boi = sd(mean_rating_boi_pexman, na.rm = T)) %>%
+  as.data.frame() %>%
+  pivot_longer(.,
+               cols=starts_with(c("mean","sd")),
+               names_sep = "_",
+               names_to = c("desc","measure"),
+               values_to = "value") %>%
+  arrange(WordType,measure)
+
+split_df <- split(graph_df, graph_df$measure)
+
+
+y <- map(split_df,function(x){
+  return(t.test(value~WordType, data = x))
+})
+
+```
+
+## Psycholinguistic variables grouped by Abstract vs. Concrete. 
+Descriptive information with plots of distributions for each psycholinguistic measure faceted by word type are provided. Two sample t-tests reveal that Abstract and Concrete nouns are matched on frequency at this stage. All other psycholinguistic variables are significantly different between word types. 
+
+
+### Descriptives
+
+```{r}
+print(x)
+
+```
+
+### Plots
+
+```{r}
+ggplot(graph_df %>% filter(measure != "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType)+
+  ggtitle("Psycholinguistics by Word Type")
+
+ggplot(graph_df %>% filter(measure == "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType)+
+  ggtitle("AoA by Word Type")
+```
+
+### T-tests
+
+```{r}
+print(y)
+
+```
+
+## Splitting into low, medium, and high BOI
+Using the cut_number function, I split the BOI values into 3 roughly equal groups. Here, I show the descriptives and distributions of the low, medium, and high BOI concrete nouns for each psycholinguistic variable. Separate one-way ANOVAs revealed significant effects of level (high vs. medium vs. low) on the value of the psycholinguistic level of interest. Post-hoc Tukey tests showed that there are significant differences in AoA and BOI between each level of BOI. Additionally, there are significant differences in contextual diversity and frequency between high-low and high-medium contrasts, but not medium-low. These tests are printed in this section.
+
+```{r, include=FALSE}
+
+equal_groups_conc <- stim_nouns %>%
+                        filter(!is.na(mean_rating_boi_pexman), WordType == "Concrete")
+
+equal_groups_conc$group <- cut_number(equal_groups_conc$mean_rating_boi_pexman,n = 3)
+equal_groups_conc$level <- factor(equal_groups_conc$group, labels = c("low", "medium","high"))
+
+graph_df_conc <- equal_groups_conc %>%
+              pivot_longer(.,
+                           cols = c("mean_rating_boi_pexman", 
+                                    "AoA_Kup_lem",
+                                    "Lg10WF",
+                                    "Lg10CD"),
+                           names_to = "measure",
+                           values_to = "value") %>%
+              select(Word, WordType, measure, value, level,group) %>%
+              mutate(measure = as.factor(measure),
+                     WordType = as.factor(WordType))
+
+
+x_conc <- equal_groups_conc %>%
+  group_by(WordType, level) %>%
+  summarize(n = n(),
+            mean_aoa = mean(AoA_Kup_lem, na.rm = T),
+            sd_aoa = sd(AoA_Kup_lem, na.rm = T),
+            mean_wf = mean(Lg10WF),
+            sd_wf = sd(Lg10WF),
+            mean_cd = mean(Lg10CD),
+            sd_cd = sd(Lg10CD),
+            mean_conc = mean(Concrete_rating),
+            sd_conc = sd(Concrete_rating),
+            mean_boi = mean(mean_rating_boi_pexman, na.rm = T),
+            sd_boi = sd(mean_rating_boi_pexman, na.rm = T)) %>%
+  as.data.frame() %>%
+  pivot_longer(.,
+               cols=starts_with(c("mean","sd")),
+               names_sep = "_",
+               names_to = c("desc","measure"),
+               values_to = "value") %>%
+  arrange(WordType,measure)
+
+
+split_df_conc <- split(graph_df_conc, graph_df_conc$measure)
+
+
+y_conc <- map(split_df_conc,function(x){
+  return(TukeyHSD(aov(value~level, data = x)))
+})
+
+
+
+
+```
+
+
+### Descriptives
+
+```{r}
+print(x_conc,n = 30)
+```
+
+### Plots
+
+```{r}
+
+
+
+ggplot(graph_df_conc %>% filter(measure != "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType+level)+
+  ggtitle("Psycholinguistic variable by Level")
+
+ggplot(graph_df_conc %>% filter(measure == "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType+level)+
+  ggtitle("AoA variable by Level")
+
+```
+
+### ANOVAs
+
+```{r}
+print(y_conc)
+
+```
+
+
+
+## Sampling 300 abstract, and 300 concrete words (100 high BOI, 100 medium BOI, 100 high BOI)
+Randomly sampled words from the complete set of abstract and concrete nouns. Abstract and Concrete nouns are matched on frequency, with all other psycholinguistic variables differing between groups. 
+
+```{r, include = FALSE}
+abs_z <- sample(stim_nouns[stim_nouns$WordType == "Abstract",]$Word, 300)
+stim_noun_abs <- stim_nouns %>%
+                    filter(Word %in% abs_z) %>%
+                    mutate(group = NA,
+                           level = NA)
+conc_z_low <-  sample(equal_groups_conc[equal_groups_conc$level == "low",]$Word, 100)
+conc_low <- equal_groups_conc %>%
+                    filter(Word %in% conc_z_low)
+
+
+conc_z_med <-  sample(equal_groups_conc[equal_groups_conc$level == "medium",]$Word, 100)
+conc_med <- equal_groups_conc %>%
+                    filter(Word %in% conc_z_med)
+
+
+conc_z_high <-  sample(equal_groups_conc[equal_groups_conc$level == "high",]$Word, 100)
+conc_high <- equal_groups_conc %>%
+                    filter(Word %in% conc_z_high)
+
+conc_abs_stim <- rbind(stim_noun_abs, conc_low,conc_med,conc_high)
+
+graph_df_stim <- conc_abs_stim %>%
+              pivot_longer(.,
+                           cols = c("mean_rating_boi_pexman", 
+                                    "AoA_Kup_lem",
+                                    "Lg10WF",
+                                    "Lg10CD"),
+                           names_to = "measure",
+                           values_to = "value") %>%
+              select(Word, WordType, measure, value, level,group) %>%
+              mutate(measure = as.factor(measure),
+                     WordType = as.factor(WordType))
+
+x_stim <- conc_abs_stim %>%
+  group_by(WordType, level) %>%
+  summarize(n = n(),
+            mean_aoa = mean(AoA_Kup_lem, na.rm = T),
+            sd_aoa = sd(AoA_Kup_lem, na.rm = T),
+            mean_wf = mean(Lg10WF),
+            sd_wf = sd(Lg10WF),
+            mean_cd = mean(Lg10CD),
+            sd_cd = sd(Lg10CD),
+            mean_conc = mean(Concrete_rating),
+            sd_conc = sd(Concrete_rating),
+            mean_boi = mean(mean_rating_boi_pexman, na.rm = T),
+            sd_boi = sd(mean_rating_boi_pexman, na.rm = T)) %>%
+  as.data.frame() %>%
+  pivot_longer(.,
+               cols=starts_with(c("mean","sd")),
+               names_sep = "_",
+               names_to = c("desc","measure"),
+               values_to = "value") %>%
+  arrange(WordType,measure)
+
+split_df_stim <- split(graph_df_stim, graph_df_stim$measure)
+
+
+y_conc_abs <- map(split_df_stim,function(x){
+  return(t.test(value~WordType, data = x))
+})
+
+```
+
+### Descriptives
+
+```{r}
+print(x_stim, n = 40)
+```
+
+### Plots
+
+```{r}
+
+
+ggplot(graph_df_stim %>% filter(measure != "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType+level)+
+  ggtitle("Psycholinguistic variable by Level and WordType")
+
+ggplot(graph_df_stim %>% filter(measure == "AoA_Kup_lem"), aes(x = value, fill = measure))+
+  geom_density(alpha = 0.5)+
+  facet_wrap(~WordType+level)+
+  ggtitle("AoA variable by Level and WordType")
+```
+
+### T-tests
+
+```{r}
+print(y_conc_abs)
+```
+
+
+
+
+## Matchit stim
+
+```{r}
+match_low_med <- equal_groups_conc %>%
+                    filter(level == c("low","medium"), !is.na(AoA_Kup_lem)) %>%
+                    matchit(level ~ AoA_Kup_lem+Lg10WF+Lg10CD, data = ., method = "optimal", distance = "glm", ratio = 1)
+
+match_df_ml <- match.data(match_low_med) 
+
+low_dist_ml <- match_df_ml %>%
+  group_by(level) %>%
+  slice_min(distance, n = 100) %>%
+  mutate(comp = "ml")
+
+match_med_high <- equal_groups_conc %>%
+                    filter(level == c("high","medium"), !is.na(AoA_Kup_lem)) %>%
+                    matchit(level ~ AoA_Kup_lem+Lg10WF+Lg10CD, data = ., method = "optimal", distance = "glm", ratio = 1)
+match_df_mh <- match.data(match_med_high) 
+
+low_dist_mh <- match_df_mh %>%
+  group_by(level) %>%
+  slice_min(distance, n = 100) %>%
+  mutate(comp = 'mh')
+
+match_low_high <- equal_groups_conc %>%
+                    filter(level == c("low","high"), !is.na(AoA_Kup_lem)) %>%
+                    matchit(level ~ AoA_Kup_lem+Lg10WF+Lg10CD, data = ., method = "optimal", distance = "glm", ratio = 1)
+match_df_lh <- match.data(match_low_high) 
+
+low_dist_lh <- match_df_lh %>%
+  group_by(level) %>%
+  slice_min(distance, n = 100) %>%
+  mutate(comp = "lh")
+
+all <- rbind(low_dist_lh, low_dist_ml, low_dist_mh)
+
+all %>%
+  group_by(comp, level) %>%
+  summarize(sum_dist = sum(distance))
+
+
+df_matched <- rbind(low_dist_lh %>% filter(level == "low" | level == "high"), low_dist_mh %>% filter(level == "medium"))
+
+df_matched_long <- df_matched %>%
+                      pivot_longer(.,
+                                   cols = c("AoA_Kup_lem", "Lg10CD", "Lg10WF"),
+                                   names_to = "measure",
+                                   values_to = "value")
+
+ggplot(df_matched_long, aes(x = value, fill = measure))+
+  geom_density()+
+  facet_wrap(~level)
+  
+
+t.test(Lg10CD~level, data = df_matched, subset = df_matched$level == c("medium", "low"))
+
+df_matched_split <- split(df_matched_long, df_matched_long$measure)
+
+
+
+df_matched_long %>%
+  group_by(level,measure) %>%
+  summarize(m = mean(value, na.rm = T))
+
+
+save(df_matched, file = "data/matched_df_conc.Rdata")
+load("data/matched_df_conc.Rdata")
+```
+
+
+```{r}
+abs_match <- stim_nouns %>%
+          filter(WordType == "Abstract" | Word %in% df_matched$Word, !is.na(AoA_Kup_lem)) %>%
+          mutate(WordType = as.factor(WordType))
+
+
+m_abs <- matchit(WordType~AoA_Kup_lem+Lg10WF, data = abs_match,method = "optimal", distance = "glm", ratio = 1 )
+
+summary(m_abs)
+
+m_conc_abs <- match.data(m_abs)
+
+plot(m_abs)
+
+m_conc_abs <- left_join(m_conc_abs, select(df_matched, Word, level), by = "Word")
+
+save(m_conc_abs, file = "data/concrete_abstract.Rdata")
+
+
+```
+
+
+## Look at variables to compare AoA and frequency between concrete and abstract. Also look at putting ASSERT into Qualtrics survey. 24 practice items with feedback. Just practice with feedback. Add fixation bars and interstimulus intervals. Power analysis with different sample sizes.

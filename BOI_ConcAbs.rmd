@@ -1,0 +1,247 @@
+---
+title: "BOI Semantic Decision Breakdown"
+author: "Stan West"
+date: "2024-05-28"
+output: pdf_document
+---
+
+This document summarizes relevant aspects of the Pexman BOI ratings for the current BOI semantic decision task. One major takeaway is that the number of abstract nouns in this dataset is limited to 118 words. This is further reduced to 115 if we filter out words that do not have psyholinguistic information. Here, frequency and contextual diversity are provided by SUBTLEX, and AoA is provided by the Kuperman norms. BOI estimates are based on Pexman et al. (2019). 
+
+As described in the next section, Pexman et al. (2019) does not provide the part of speech norms with their data, so I had to map that information from the Kuperman AoA norms data table. There was not perfect overlap (251 NA's). In order to rectify this, we either will need to hand code these, or look back to the Brysbaert, New, & Keuleers (2012) paper that adds this information to the SUBTLEX database. However, I am having trouble accessing that site (https://link.springer.com/article/10.3758/s13428-012-0190-4#Sec5).
+
+The first section of this markdown describes the distributions of psycholinguistic measures across concrete and abstract nouns for the full noun set. Subsequent sections attempt to match concrete and abstract nouns on different combinations of variables including AoA, frequncy, and contextual diversity. Given that we only have BOI for 115 abstract nouns, the largest possible dataset (with equal numbers of concrete and abstract nouns) is 230.  
+
+
+```{r setup, include=FALSE}
+
+
+library(ggplot2)
+library(dplyr)
+library(MatchIt)
+library(readxl)
+library(showtext)
+library(tidyr)
+meta <- readRDS("data/BOI_Metadata.rds")
+conc <- read_excel("data/Paxman_concreteness.xlsx") 
+freq_context <- read.csv("data/SUBTLEXusfrequencyabove1.csv")
+aoa <- read_excel("data/AoA_51715_words.xlsx")
+
+meta <- left_join(meta, conc, by = c("item" = "Word") )
+meta <- left_join(meta,select(freq_context, Word, Lg10WF, Lg10CD ), by = c("item" = "Word"))
+meta <- left_join(meta, select(aoa, Word, AoA_Kup_lem, Dom_PoS_SUBTLEX), by = c("item" = "Word"))
+meta$WordType <- as.factor(meta$WordType)
+meta$AoA_Kup_lem <- as.numeric(meta$AoA_Kup_lem)
+```
+
+
+
+
+## Descriptives for nouns with a concreteness rating.
+Of the total 9,354 words, 4092 (118 abstract) had concreteness ratings and were nouns. The part of speech norms were mapped to the BOI words via the Kuperman AoA norms dataset. I looked back at the Dom_PoS_SUBTLEX column that provides the part of speech norms, and it looks like the same data that was used in Pexman et al. (2019). However, there are some irregularities with the part of speech labeling that was not reported in that paper, so maybe they did some hand coding to fix these. This includes instances of part of speech being coded as NA or as integers. This is due to differences in word sets across experiments. Going back to the Brysbaert, New, &
+Keuleers (2012) paper referenced in Pexman et al. (2019), I could not access the link that they provide for the part of speech norms. They indicate that there is also a supplementary materials which has the norms, but I could not find that either. 
+
+```{r}
+meta %>%
+unique() %>%
+filter(!is.na(Concrete_rating), Dom_PoS_SUBTLEX == "Noun") %>%
+group_by(WordType) %>%
+summarize(mean_boi = mean(mean_rating_boi_pexman),
+          n = n(),
+          range = range(mean_rating_boi_pexman))
+
+meta %>%
+group_by(Dom_PoS_SUBTLEX) %>%
+summarize(n = n()) %>%
+as.data.frame() %>%
+head(.,n =29)
+```
+
+## Distributions of psycholinguistic variables
+Of the 118 abstract nouns from the full dataset, 115 have frequency, contextual diversity, and AoA information.
+There are similar distributions between Abstract and Concrete nouns in terms of contextual diversity, word frequency, and AoA. As expected, the mean BOI ratings are much lower for abstract nouns.
+```{r}
+x <- meta %>%
+filter(!is.na(Concrete_rating), !is.na(Lg10WF),!is.na(Lg10CD), Dom_PoS_SUBTLEX == "Noun") %>%
+select(item, WordType, mean_rating_boi_pexman, Concrete_rating, AoA_Kup_lem, Lg10WF, Lg10CD) %>%
+pivot_longer(.,
+             cols = c("mean_rating_boi_pexman", "Lg10WF", "Lg10CD"),
+             names_to = "measure",
+             values_to = "value")
+
+x %>%
+group_by(WordType, measure) %>%
+summarize(mean = mean(value),
+          n = n(),
+          range = range(value))
+
+ggplot(x, aes(x = value))+
+geom_density(aes(fill = measure),alpha = 0.5)+
+facet_wrap(~WordType)+
+labs(x = "Psycholinguistic Measure")+
+ggtitle("Psycholinguistic Measure Distribution across Abstract and Concrete Nouns")
+
+ggplot(x, aes(x = AoA_Kup_lem))+
+geom_density(aes(fill = WordType))+
+facet_wrap(~WordType)+
+labs(x = "Kuperman AoA ") +
+ggtitle("Kuperman AoA across Abstract and Concrete Nouns")           
+```
+
+
+## Matching on variables.
+
+### Matching on AoA, frequency, and contextual diversity.
+Tables indicate how well matched concrete and abstract words are on the different psycholinguisitc variables. The last figure of this section shows what the distribution of BOI is for the matched concrete words. 
+
+```{r}
+
+model_df <- meta %>%
+filter(!is.na(WordType),
+       !is.na(Concrete_rating), 
+       !is.na(Lg10WF),!is.na(Lg10CD), 
+       Dom_PoS_SUBTLEX == "Noun") %>%
+select(item, WordType, mean_rating_boi_pexman, Concrete_rating, AoA_Kup_lem, Lg10WF, Lg10CD) 
+
+
+
+model_match <- matchit(WordType~AoA_Kup_lem+Lg10CD+Lg10WF,method = "optimal",distance = "glm", data = model_df, ratio = 1)
+summary(model_match)
+plot(model_match)
+matched_d <- match.data(model_match)
+
+matched_d %>% 
+group_by(WordType) %>% 
+summarize(m_aoa = mean(AoA_Kup_lem), m_cd = mean(Lg10CD),m_wf = mean(Lg10WF), n = n())
+
+ggplot(data = matched_d[matched_d$WordType == "Concrete",])+
+geom_density(aes(x = mean_rating_boi_pexman))+
+labs(x = "Mean BOI")+
+ggtitle("Distribution of BOI for Matched Concrete Nouns")
+
+
+```
+
+### Matching on AoA and frequency
+Tables indicate how well matched concrete and abstract words are on the different psycholinguisitc variables. The last figure of this section shows what the distribution of BOI is for the matched concrete words. 
+
+```{r}
+
+model_match <- matchit(WordType~AoA_Kup_lem+Lg10WF,method = "optimal",distance = "glm", data = model_df, ratio = 1)
+summary(model_match)
+plot(model_match)
+matched_d <- match.data(model_match)
+
+matched_d %>% 
+group_by(WordType) %>% 
+summarize(m_aoa = mean(AoA_Kup_lem), m_cd = mean(Lg10CD),m_wf = mean(Lg10WF), n = n())
+
+ggplot(data = matched_d[matched_d$WordType == "Concrete",])+
+geom_density(aes(x = mean_rating_boi_pexman))+
+labs(x = "Mean BOI")+
+ggtitle("Distribution of BOI for Matched Concrete Nouns")
+
+
+```
+
+
+### Matching on AoA and diversity
+Tables indicate how well matched concrete and abstract words are on the different psycholinguisitc variables. The last figure of this section shows what the distribution of BOI is for the matched concrete words. 
+
+```{r}
+
+model_match <- matchit(WordType~AoA_Kup_lem+Lg10CD,method = "optimal",distance = "glm", data = model_df, ratio = 1)
+summary(model_match)
+plot(model_match)
+matched_d <- match.data(model_match)
+
+matched_d %>% 
+group_by(WordType) %>% 
+summarize(m_aoa = mean(AoA_Kup_lem), m_cd = mean(Lg10CD),m_wf = mean(Lg10WF), n = n())
+
+ggplot(data = matched_d[matched_d$WordType == "Concrete",])+
+geom_density(aes(x = mean_rating_boi_pexman))+
+labs(x = "Mean BOI")+
+ggtitle("Distribution of BOI for Matched Concrete Nouns")
+
+
+```
+
+### Matching on diversity and frequency
+Tables indicate how well matched concrete and abstract words are on the different psycholinguisitc variables. The last figure of this section shows what the distribution of BOI is for the matched concrete words. 
+
+```{r}
+
+model_match <- matchit(WordType~Lg10CD+Lg10WF,method = "optimal",distance = "glm", data = model_df, ratio = 1)
+summary(model_match)
+plot(model_match)
+matched_d <- match.data(model_match)
+
+matched_d %>% 
+group_by(WordType) %>% 
+summarize(m_aoa = mean(AoA_Kup_lem), m_cd = mean(Lg10CD),m_wf = mean(Lg10WF), n = n())
+
+ggplot(data = matched_d[matched_d$WordType == "Concrete",])+
+geom_density(aes(x = mean_rating_boi_pexman))+
+labs(x = "Mean BOI")+
+ggtitle("Distribution of BOI for Matched Concrete Nouns")
+
+
+```
+
+### Matching on just AoA.
+Tables indicate how well matched concrete and abstract words are on the different psycholinguisitc variables. The last figure of this section shows what the distribution of BOI is for the matched concrete words. 
+
+```{r}
+
+model_match <- matchit(WordType~AoA_Kup_lem,method = "optimal",distance = "glm", data = model_df, ratio = 1)
+summary(model_match)
+plot(model_match)
+matched_d <- match.data(model_match)
+
+matched_d %>% 
+group_by(WordType) %>% 
+summarize(m_aoa = mean(AoA_Kup_lem), m_cd = mean(Lg10CD),m_wf = mean(Lg10WF), n = n())
+
+ggplot(data = matched_d[matched_d$WordType == "Concrete",])+
+geom_density(aes(x = mean_rating_boi_pexman))+
+labs(x = "Mean BOI")+
+ggtitle("Distribution of BOI for Matched Concrete Nouns")
+
+
+```
+
+
+
+
+## Creating low, medium, high bins
+
+```{r}
+df_cut <- meta %>%
+filter(WordType == "Concrete" & 
+       Dom_PoS_SUBTLEX == "Noun" &
+       !is.na(mean_rating_boi_pexman) & 
+       !is.na(Lg10WF) &
+       !is.na(Lg10CD)) 
+
+df_cut$bin <- cut_number(df_cut$mean_rating_boi_pexman, n =3)
+df_cut$bin <- as.factor(df_cut$bin)
+
+df_cut %>% 
+group_by(bin) %>%
+summarize(mean_boi = mean(mean_rating_boi_pexman),
+          n = n(),
+          range = range(mean_rating_boi_pexman),
+          aoa = mean(AoA_Kup_lem),
+          wf = mean(Lg10WF, na.rm = T),
+          cd = mean(Lg10CD, na.rm = T),
+          concreteness = mean(Concrete_rating))
+
+hist(df_cut$mean_rating_boi_pexman)
+
+matchit(bin~AoA_Kup_lem, data = df_cut, method = "optimal",distance = "glm", ratio = 1)
+
+```
+
+
+
+

@@ -1,0 +1,61 @@
+---
+title: "BOI_Regression"
+author: "Stan West"
+date: "2024-10-07"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+df <- readRDS("data/BOI-Assert-ADC_metadata.rds")
+load("data/concrete_abstract.Rdata")
+df_stim <- m_conc_abs %>%
+  select(Word, Level = level) %>%
+  unique() %>%
+  mutate(Level = as.character(Level))
+
+df_stim[is.na(df_stim$Level), ] <- "abstract"
+df_stim$Level <- as.factor(df_stim$Level)
+
+df_correct <- df %>% 
+  filter(correct == "true")
+
+df_joined <- left_join(df, df_stim, by = c("word" = "Word"))
+
+```
+
+## Filter only correct responses
+
+```{r cars}
+
+df_plot <- df_joined %>%
+  select(PROLIFIC_PID, duration, perc_correct, Level, group,correct,n_correct,n_incorrect,adc_compscore) %>%
+  group_by(PROLIFIC_PID, Level) %>%
+  summarize(PROLIFIC_PID = PROLIFIC_PID, duration = mean(duration), perc_correct = sum(correct == "true") / sum(correct == "true" | correct == "false"), Level = Level, group = group, adc_compscore = adc_compscore) %>%
+  unique()
+  
+  
+ggplot(df_plot, aes(x = adc_compscore, y = duration, color = group))+
+  geom_point() +
+  facet_grid(~Level)+
+  geom_smooth(method = "lm")
+
+
+summary(lm(duration ~ adc_compscore, data = df_joined))
+
+summary(lm(duration ~ adc_compscore + group + Level, data = df_joined))
+
+
+
+```
+
+## 
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
