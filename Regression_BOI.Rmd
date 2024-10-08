@@ -5,15 +5,24 @@ date: "2024-10-07"
 output: pdf_document
 ---
 
+
+### This document describes the relationship between scores on the ADC and performance on a semantic decision task. Independent samples t-tests show that groups overall do not differ in accuracy or response latency *t*(603.71) = -0.56, *p* = 0.58 & *t*(597.39) = 1.49, *p* = 0.14, respectively. Distributions of response latency and accuracy across groups and BOI are shown in the violin plots below. Also plotted is the distribution of accuracy and resposne latency across a range of ADC scores. Each point refers to the average latency or average accuracy for a participant in each of the BOI levels. This is separated out by group. Finally, there are nested linear models showing the relationship between each of our DVs (resposne latency & accuracy) and group, group and BOI level, and group, BOI level, and ADC score. Nested model comparisons show that the best fitting model for both of the DVs includes group & BOI level, but not ADC scores. 
+
+
+
 ```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(purrr)
+library(lme4)
+library(knitr)
+
 
 df <- readRDS("data/BOI-Assert-ADC_metadata.rds")
-load("data/concrete_abstract.Rdata")
-df_stim <- m_conc_abs %>%
+load("data/stim_600.Rdata")
+df_stim <- conc_abs_stim %>%
   select(Word, level = level) %>%
   unique() %>%
   mutate(level = as.character(level))
@@ -26,17 +35,16 @@ df_stim$level <- as.factor(df_stim$level)
 ```
 
 
-## Descriptives
 
-```{r,echo=F}
+```{r,echo=F,error=FALSE}
 df_descrip <- df %>%
   left_join(df_stim, by = c("word" = "Word")) %>%
   select(PROLIFIC_PID, correct, duration, group, n_correct,n_incorrect, level,adc_compscore) %>%
   group_by(PROLIFIC_PID, level) %>%
-  reframe(PROLIFIC_PID = PROLIFIC_PID, 
+  summarize(PROLIFIC_PID = PROLIFIC_PID, 
             mean_duration = mean(duration),
             perc_correct = sum(correct == "true")/sum(correct == "true" | correct == "false"),
-            group = group,
+            group = as.factor(group),
             adc_compscore = adc_compscore) %>%
   unique() %>%
   ungroup
@@ -45,54 +53,104 @@ df_descrip <- df %>%
 ```
 
 
-## Table of means and boxplots
+## Table of means and violin plots 
 
-```{r}
+```{r, echo = FALSE}
 
-df_descrip %>%
+x <- df_descrip %>%
   group_by(group) %>%
   summarize(mean_dur = mean(mean_duration),
-            mean_correct = mean(perc_correct))
+            sd_dur = sd(mean_duration),
+            mean_correct = mean(perc_correct),
+            sd_correct = sd(perc_correct))
+
+
+y <- df_descrip %>%
+  group_by(group,level) %>%
+  summarize(mean_dur = mean(mean_duration),
+            sd_dur = sd(mean_duration),
+            mean_correct = mean(perc_correct),
+            sd_correct = sd(perc_correct))
+
+adc <- df_descrip %>%
+  group_by(group) %>%
+  summarize(mean_adc = mean(adc_compscore),
+            sd_adc = sd(adc_compscore))
+
+kable(x, caption = "Descriptives Between Groups",col.names = c("Group", "Mean Duration","SD Duration", "Average Percent Correct", "SD Percent Correct"))
+kable(y, caption = "Descriptives Between Groups and BOI Levels",col.names = c("Group","Level", "Mean Duration","SD Duration", "Average Percent Correct", "SD Percent Correct"))
+kable(adc, caption = "ADC Descriptives Between Groups",col.names = c("Group", "Mean ADC","SD ADC"))
+
+
 
 ggplot(df_descrip, aes(x = group, y = mean_duration))+
-  geom_boxplot()
+  geom_violin(trim = FALSE, fill = "grey", color = "darkred")+
+  geom_boxplot(width = 0.1)+
+  facet_grid(~level)+
+  ggtitle("Mean Duration Between Groups & Across BOI Levels")
 
 
 ggplot(df_descrip, aes(x = group, y = perc_correct))+
-  geom_boxplot()+
-  facet_wrap(~level)
-  
+  geom_violin(trim = FALSE, fill = "grey", color = "darkred")+
+  geom_boxplot(width = 0.1)+
+  facet_grid(~level)+
+  ggtitle("Percent Correct Between Groups & Across BOI Levels")
+
+
 
 ```
 
 
-## T-tests of overall response latency and accuracy
+## T-tests of overall response latency and accuracy. Groups do not differ in overall response latency or accuracy.
 
-```{r}
+```{r, echo=FALSE}
 t.test(mean_duration ~ group, data = df_descrip)
 t.test(perc_correct ~ group, data = df_descrip)
 
 ```
 
 
-## Filter only correct responses
+## Plotting duration and percent correct over ADC scores.
 
-```{r cars}
+```{r, echo = FALSE}
 
-
-  
 ggplot(df_descrip, aes(x = adc_compscore, y = mean_duration, color = group))+
-  geom_point() +
-  facet_wrap(~level)+
-  geom_smooth(method = "lm")
+  geom_point(alpha = 0.5) +
+  facet_grid(~level)+
+  geom_smooth(method = "lm",alpha = 0.3)+
+  ggtitle("Scatterplot of Average Durations Between Groups and Across BOI")
 
 
-summary(lm(mean_duration ~ adc_compscore + group + level, data = df_descrip))
-
-summary(lm(perc_correct ~ adc_compscore + group + level, data = df_descrip))
-
+ggplot(df_descrip, aes(x = adc_compscore, y = perc_correct, color = group))+
+  geom_point(alpha = 0.5) +
+  facet_grid(~level)+
+  geom_smooth(method = "lm", alpha = 0.3)+
+  ggtitle("Scatterplot of Percent Correct Between Groups and Across BOI")
 
 ```
 
+
+## Nested model comparisons (group, group + level, & group + level + ADC)
+
+```{r}
+m1_duration <- lm(mean_duration ~ group, data = df_descrip)
+m2_duration <- lm(mean_duration ~ group * level, data = df_descrip)
+m3_duration <- lm(mean_duration ~ group * level + adc_compscore, data = df_descrip)
+list_mods_dur <- list(model_1 = m1_duration,model_2 = m2_duration,model_3 = m3_duration)
+lapply(list_mods_dur, summary)
+
+anova( m1_duration,m2_duration,m3_duration)
+
+
+m1_correct <- lm(perc_correct ~ group, data = df_descrip)
+m2_correct <- lm(perc_correct ~ group * level, data = df_descrip)
+m3_correct <- lm(perc_correct ~ group * level + adc_compscore, data = df_descrip)
+list_mods_acc <- list(model_1 = m1_correct, model_2 = m2_correct, model_3 = m3_correct)
+lapply(list_mods_acc, summary)
+
+anova(m1_correct,m2_correct,m3_correct)
+
+
+```
 
 
