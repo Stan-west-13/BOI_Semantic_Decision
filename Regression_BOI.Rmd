@@ -16,7 +16,6 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(purrr)
-library(lme4)
 library(knitr)
 
 
@@ -135,7 +134,7 @@ ggplot(df_descrip, aes(x = adc_compscore, y = perc_correct, color = group))+
 ```{r}
 m1_duration <- lm(mean_duration ~ group, data = df_descrip)
 m2_duration <- lm(mean_duration ~ group * level, data = df_descrip)
-m3_duration <- lm(mean_duration ~ group * level + adc_compscore, data = df_descrip)
+m3_duration <- lm(mean_duration ~ group * level * adc_compscore, data = df_descrip)
 list_mods_dur <- list(model_1 = m1_duration,model_2 = m2_duration,model_3 = m3_duration)
 lapply(list_mods_dur, summary)
 
@@ -144,7 +143,7 @@ anova( m1_duration,m2_duration,m3_duration)
 
 m1_correct <- lm(perc_correct ~ group, data = df_descrip)
 m2_correct <- lm(perc_correct ~ group * level, data = df_descrip)
-m3_correct <- lm(perc_correct ~ group * level + adc_compscore, data = df_descrip)
+m3_correct <- lm(perc_correct ~ group * level * adc_compscore, data = df_descrip)
 list_mods_acc <- list(model_1 = m1_correct, model_2 = m2_correct, model_3 = m3_correct)
 lapply(list_mods_acc, summary)
 
@@ -153,4 +152,33 @@ anova(m1_correct,m2_correct,m3_correct)
 
 ```
 
+
+
+
+## Nested model comparisons no abstract category (group, group + level, & group + level + ADC)
+
+```{r}
+
+d_descrip_no_abstract <- df_descrip %>%
+  filter(!level == "abstract")
+
+m1_duration <- lm(mean_duration ~ group, data = d_descrip_no_abstract)
+m2_duration <- lm(mean_duration ~ group * level, data = d_descrip_no_abstract)
+m3_duration <- lm(mean_duration ~ group * level * adc_compscore, data = d_descrip_no_abstract)
+list_mods_dur <- list(model_1 = m1_duration,model_2 = m2_duration,model_3 = m3_duration)
+lapply(list_mods_dur, summary)
+
+anova( m1_duration,m2_duration,m3_duration)
+
+
+m1_correct <- lm(perc_correct ~ group, data = d_descrip_no_abstract)
+m2_correct <- lm(perc_correct ~ group * level, data = d_descrip_no_abstract)
+m3_correct <- lm(perc_correct ~ group * level * adc_compscore, data = d_descrip_no_abstract)
+list_mods_acc <- list(model_1 = m1_correct, model_2 = m2_correct, model_3 = m3_correct)
+lapply(list_mods_acc, summary)
+
+anova(m1_correct,m2_correct,m3_correct)
+
+
+```
 
