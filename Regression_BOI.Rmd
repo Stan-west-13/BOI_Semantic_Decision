@@ -129,7 +129,7 @@ ggplot(df_descrip, aes(x = adc_compscore, y = perc_correct, color = group))+
 ```
 
 
-## Nested model comparisons (group, group + level, & group + level + ADC)
+## Nested model comparisons (group, group + level, & group + level + ADC, with interactions)
 
 ```{r}
 m1_duration <- lm(mean_duration ~ group, data = df_descrip)
@@ -155,7 +155,7 @@ anova(m1_correct,m2_correct,m3_correct)
 
 
 
-## Nested model comparisons no abstract category (group, group + level, & group + level + ADC)
+## Nested model comparisons no abstract category (group, group + level, & group + level + ADC, with interactions)
 
 ```{r}
 
