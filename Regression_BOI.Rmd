@@ -160,7 +160,19 @@ anova(m1_correct,m2_correct,m3_correct)
 ```{r}
 
 d_descrip_no_abstract <- df_descrip %>%
-  filter(!level == "abstract")
+  filter(!level == "abstract") %>%
+  mutate(level = droplevels(factor(level, levels = c("low", "medium", "high"), labels = c("low", "mid", "high"))))
+
+contr.mat.level <- matrix(data = c(2,0,-1,1,-1,-1), nrow = 3, ncol = 2, byrow = T,)
+colnames(contr.mat.level) <- c("mid","high")
+contr.mat.group <- matrix(data = c(-0.5,0.5), nrow = 2, ncol = 1, byrow = T,)
+colnames(contr.mat.group) <- c("non-ASD")
+
+
+contrasts(d_descrip_no_abstract$group) <- contr.mat.group
+contrasts(d_descrip_no_abstract$level) <- contr.mat.level
+
+
 
 m1_duration <- lm(mean_duration ~ group, data = d_descrip_no_abstract)
 m2_duration <- lm(mean_duration ~ group * level, data = d_descrip_no_abstract)
