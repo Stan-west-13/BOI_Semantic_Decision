@@ -82,11 +82,15 @@ kable(adc, caption = "ADC Descriptives Between Groups",col.names = c("Group", "M
 
 
 
-ggplot(df_descrip, aes(x = group, y = mean_duration))+
-  geom_violin(trim = FALSE, fill = "grey", color = "darkred")+
+ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = mean_duration, color = group))+
+  scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
+  scale_x_discrete(labels = c("autistic","non-autistic"))+
+  geom_violin(trim = FALSE)+
   geom_boxplot(width = 0.1)+
-  facet_grid(~level)+
-  ggtitle("Mean Duration Between Groups & Across BOI Levels")
+  facet_grid(~factor(level, levels = c("low","medium", "high")))+
+  ggtitle("Mean Duration Between Groups & Across BOI Levels")+
+  theme_classic()
+
 
 
 ggplot(df_descrip, aes(x = group, y = perc_correct))+
