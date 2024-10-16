@@ -95,6 +95,9 @@ ggplot(df_descrip, aes(x = group, y = perc_correct))+
   facet_grid(~level)+
   ggtitle("Percent Correct Between Groups & Across BOI Levels")
 
+# HEx codes to use
+#LSUPurple='#461D7C'
+#LSUGold='#D29F13'
 
 
 ```
@@ -164,10 +167,13 @@ d_descrip_no_abstract <- df_descrip %>%
   mutate(level = droplevels(factor(level, levels = c("low", "medium", "high"), labels = c("low", "mid", "high"))))
 
 contr.mat.level <- matrix(data = c(2,0,-1,1,-1,-1), nrow = 3, ncol = 2, byrow = T,)
-colnames(contr.mat.level) <- c("mid","high")
+colnames(contr.mat.level) <- c("mh_v_low","high_v_mid")
 contr.mat.group <- matrix(data = c(-0.5,0.5), nrow = 2, ncol = 1, byrow = T,)
 colnames(contr.mat.group) <- c("non-ASD")
 
+
+contrasts(d_descrip_no_abstract$level) <- varContrasts(d_descrip_no_abstract$level,Type="POC",
+                         POCList=list(c(.33,.33,-.67),c(.5,-.5,0)), Labels =c('mh_v_low', 'm_v_h'))
 
 contrasts(d_descrip_no_abstract$group) <- contr.mat.group
 contrasts(d_descrip_no_abstract$level) <- contr.mat.level
