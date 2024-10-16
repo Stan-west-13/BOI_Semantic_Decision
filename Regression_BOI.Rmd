@@ -83,11 +83,15 @@ kable(adc, caption = "ADC Descriptives Between Groups",col.names = c("Group", "M
 
 
 
-ggplot(df_descrip, aes(x = group, y = mean_duration))+
-  geom_violin(trim = FALSE, fill = "grey", color = "darkred")+
+ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = mean_duration, color = group))+
+  scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
+  scale_x_discrete(labels = c("autistic","non-autistic"))+
+  geom_violin(trim = FALSE)+
   geom_boxplot(width = 0.1)+
-  facet_grid(~level)+
-  ggtitle("Mean Duration Between Groups & Across BOI Levels")
+  facet_grid(~factor(level, levels = c("low","medium", "high")))+
+  ggtitle("Mean Duration Between Groups & Across BOI Levels")+
+  theme_classic()
+
 
 
 ggplot(df_descrip, aes(x = group, y = perc_correct))+
@@ -96,6 +100,9 @@ ggplot(df_descrip, aes(x = group, y = perc_correct))+
   facet_grid(~level)+
   ggtitle("Percent Correct Between Groups & Across BOI Levels")
 
+# HEx codes to use
+#LSUPurple='#461D7C'
+#LSUGold='#D29F13'
 
 
 ```
@@ -145,6 +152,50 @@ anova( m1_duration,m2_duration,m3_duration)
 m1_correct <- lm(perc_correct ~ group, data = df_descrip)
 m2_correct <- lm(perc_correct ~ group * level, data = df_descrip)
 m3_correct <- lm(perc_correct ~ group * level + adc_compscore, data = df_descrip)
+list_mods_acc <- list(model_1 = m1_correct, model_2 = m2_correct, model_3 = m3_correct)
+lapply(list_mods_acc, summary)
+
+anova(m1_correct,m2_correct,m3_correct)
+
+
+```
+
+
+
+
+## Nested model comparisons no abstract category (group, group + level, & group + level + ADC, with interactions)
+
+```{r}
+
+d_descrip_no_abstract <- df_descrip %>%
+  filter(!level == "abstract") %>%
+  mutate(level = droplevels(factor(level, levels = c("low", "medium", "high"), labels = c("low", "mid", "high"))))
+
+contr.mat.level <- matrix(data = c(2,0,-1,1,-1,-1), nrow = 3, ncol = 2, byrow = T,)
+colnames(contr.mat.level) <- c("mh_v_low","high_v_mid")
+contr.mat.group <- matrix(data = c(-0.5,0.5), nrow = 2, ncol = 1, byrow = T,)
+colnames(contr.mat.group) <- c("non-ASD")
+
+
+contrasts(d_descrip_no_abstract$level) <- varContrasts(d_descrip_no_abstract$level,Type="POC",
+                         POCList=list(c(.33,.33,-.67),c(.5,-.5,0)), Labels =c('mh_v_low', 'm_v_h'))
+
+contrasts(d_descrip_no_abstract$group) <- contr.mat.group
+contrasts(d_descrip_no_abstract$level) <- contr.mat.level
+
+
+m1_duration <- lm(mean_duration ~ group, data = d_descrip_no_abstract)
+m2_duration <- lm(mean_duration ~ group * level, data = d_descrip_no_abstract)
+m3_duration <- lm(mean_duration ~ group * level * adc_compscore, data = d_descrip_no_abstract)
+list_mods_dur <- list(model_1 = m1_duration,model_2 = m2_duration,model_3 = m3_duration)
+lapply(list_mods_dur, summary)
+
+anova( m1_duration,m2_duration,m3_duration)
+
+
+m1_correct <- lm(perc_correct ~ group, data = d_descrip_no_abstract)
+m2_correct <- lm(perc_correct ~ group * level, data = d_descrip_no_abstract)
+m3_correct <- lm(perc_correct ~ group * level * adc_compscore, data = d_descrip_no_abstract)
 list_mods_acc <- list(model_1 = m1_correct, model_2 = m2_correct, model_3 = m3_correct)
 lapply(list_mods_acc, summary)
 
