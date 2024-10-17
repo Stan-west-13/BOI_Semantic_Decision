@@ -16,9 +16,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(purrr)
-library(lme4)
 library(knitr)
-
+library(svglite)
 
 df <- readRDS("data/BOI-Assert-ADC_metadata.rds")
 load("data/stim_600.Rdata")
@@ -87,18 +86,51 @@ ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = mean_dura
   scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
   scale_x_discrete(labels = c("autistic","non-autistic"))+
   geom_violin(trim = FALSE)+
-  geom_boxplot(width = 0.1)+
+  labs(y = "reaction time")+
+  geom_boxplot(width = 0.1, color = "#595959")+
   facet_grid(~factor(level, levels = c("low","medium", "high")))+
-  ggtitle("Mean Duration Between Groups & Across BOI Levels")+
-  theme_classic()
+  ggtitle("Average Group Reaction Time Across BOI Levels")+
+  theme_bw()
+ggsave("Figures/reaction_time.svg",width = 7.5,height = 7)
+
+
+ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = mean_duration, color = group))+
+  scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
+  scale_x_discrete(labels = c("autistic","non-autistic"))+
+  geom_violin(trim = FALSE)+
+  labs(y = "reaction time")+
+  geom_boxplot(width = 0.1, color = "#595959")+
+  facet_grid(~factor(level, levels = c("low","medium", "high")))+
+  ggtitle("Average Group Reaction Time Across BOI Levels")+
+  geom_point(position = "jitter", alpha = 0.3)+
+  theme_bw()
+ggsave("Figures/reaction_time_points.svg",width = 7.5,height = 7)
 
 
 
-ggplot(df_descrip, aes(x = group, y = perc_correct))+
-  geom_violin(trim = FALSE, fill = "grey", color = "darkred")+
-  geom_boxplot(width = 0.1)+
-  facet_grid(~level)+
-  ggtitle("Percent Correct Between Groups & Across BOI Levels")
+
+ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = perc_correct, color = group))+
+  scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
+  scale_x_discrete(labels = c("autistic","non-autistic"))+
+  geom_violin(trim = FALSE)+
+  labs(y = "% accuracy")+
+  geom_boxplot(width = 0.1, color = "#595959")+
+  facet_grid(~factor(level, levels = c("low","medium", "high")))+
+  theme_bw()+
+  ggtitle("Group Accuracy Across BOI Levels")
+ggsave("Figures/accuracy.svg",width = 7.5,height = 7)
+
+ggplot(df_descrip %>% filter(!level == "abstract"), aes(x = group, y = perc_correct, color = group))+
+  scale_color_manual(values = c("#461D7C", "#D29F13"), guide = "none")+
+  scale_x_discrete(labels = c("autistic","non-autistic"))+
+  geom_violin(trim = FALSE)+
+  labs(y = "% accuracy")+
+  geom_boxplot(width = 0.1, color = "#595959")+
+  facet_grid(~factor(level, levels = c("low","medium", "high")))+
+  theme_bw()+
+  geom_point(position = "jitter", alpha = 0.2)+
+  ggtitle("Group Accuracy Across BOI Levels")
+ggsave("Figures/accuracy_points.svg",width = 7.5,height = 7)
 
 # HEx codes to use
 #LSUPurple='#461D7C'
@@ -177,8 +209,6 @@ contr.mat.group <- matrix(data = c(-0.5,0.5), nrow = 2, ncol = 1, byrow = T,)
 colnames(contr.mat.group) <- c("non-ASD")
 
 
-contrasts(d_descrip_no_abstract$level) <- varContrasts(d_descrip_no_abstract$level,Type="POC",
-                         POCList=list(c(.33,.33,-.67),c(.5,-.5,0)), Labels =c('mh_v_low', 'm_v_h'))
 
 contrasts(d_descrip_no_abstract$group) <- contr.mat.group
 contrasts(d_descrip_no_abstract$level) <- contr.mat.level
