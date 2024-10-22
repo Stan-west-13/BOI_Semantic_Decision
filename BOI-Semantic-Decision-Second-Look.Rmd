@@ -1,8 +1,10 @@
 ---
 title: "BOI Semantic Judgement Second Look"
 author: "Stan West"
-date: "2024-07-01"
-output: pdf_document
+date: '2024-07-01'
+output:
+  html_document:
+    df_print: paged
 ---
 
 This Rmarkdown will take a second look at the semantic decision task data where participants were told to decide whether a word was abstract or concrete. The concrete words in this set of 600 words varied on their level of body-object interaction scores. Participants were provided with practice pressing the buttons indicating their decision ('F' for concrete, and 'J' for abstract). Participants were also provided with 24 practice trials with feedback where they were told if their decision was incorrect. 
